@@ -16,11 +16,8 @@ class Analytics:
         self._ensure_views()
 
     def _ensure_views(self):
-        """Create views if they don't exist."""
-        views_path = Path(__file__).parent / "db" / "views.sql"
-        if views_path.exists():
-            with open(views_path) as f:
-                self.db.execute(f.read())
+        """Views are created during repo init, skip here (read-only mode)."""
+        pass  # Views created by Repository._init_schema()
 
     def monthly_spend(
         self, issuer: str = None, from_date: date = None, to_date: date = None

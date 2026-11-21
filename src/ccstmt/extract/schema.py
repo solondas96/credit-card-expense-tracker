@@ -27,6 +27,26 @@ class TransactionExtract(BaseModel):
 class StatementExtract(BaseModel):
     """Extracted statement data."""
 
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "issuer": "hdfc",
+                "card_last4": "1234",
+                "currency": "INR",
+                "statement_date": "2024-11-22",
+                "total_amount_due": "15000.00",
+                "transactions": [
+                    {
+                        "txn_date": "2024-11-15",
+                        "description": "Amazon purchase",
+                        "amount": "2500.00",
+                        "direction": "debit",
+                    }
+                ],
+            }
+        }
+    }
+
     issuer: str
     card_last4: str
     card_variant: Optional[str] = None
@@ -45,24 +65,3 @@ class StatementExtract(BaseModel):
     available_credit: Optional[Decimal] = Field(None, decimal_places=2)
     reward_points_closing: Optional[Decimal] = Field(None, decimal_places=2)
     transactions: list[TransactionExtract]
-
-    class Config:
-        """Pydantic config."""
-
-        json_schema_extra = {
-            "example": {
-                "issuer": "hdfc",
-                "card_last4": "1234",
-                "currency": "INR",
-                "statement_date": "2024-11-22",
-                "total_amount_due": "15000.00",
-                "transactions": [
-                    {
-                        "txn_date": "2024-11-15",
-                        "description": "Amazon purchase",
-                        "amount": "2500.00",
-                        "direction": "debit",
-                    }
-                ],
-            }
-        }
