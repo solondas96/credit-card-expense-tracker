@@ -1,6 +1,6 @@
 """PDF processing tests."""
 
-from ccstmt.pdf.redact import redact_card_numbers, extract_card_last4
+from ccstmt.pdf.redact import extract_card_last4, redact_card_numbers
 
 
 def test_redact_card_numbers_with_dashes():
