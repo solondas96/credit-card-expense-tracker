@@ -1,12 +1,19 @@
 """Delta sync orchestration."""
 
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
+from ccstmt.db.loader import StatementLoader
 from ccstmt.db.repo import Repository
+from ccstmt.extract.llm import LLMExtractor
+from ccstmt.extract.validate import validate_statement
 from ccstmt.gmail.client import GmailClient
 from ccstmt.gmail.discovery import build_query
 from ccstmt.ingest.storage import compute_sha256, save_raw_file
+from ccstmt.pdf.decrypt import decrypt_pdf
+from ccstmt.pdf.redact import redact_card_numbers
+from ccstmt.pdf.text import extract_text
 
 
 class SyncOrchestrator:
@@ -18,6 +25,30 @@ class SyncOrchestrator:
         self.client = client
         self.data_dir = data_dir
         self.settings = settings
+
+        # Initialize LLM extractor
+        if settings.llm_provider == "anthropic":
+            self.extractor = LLMExtractor(
+                "anthropic",
+                api_key=settings.anthropic_api_key,
+                model=settings.llm_model or "claude-opus-5-5",
+            )
+        elif settings.llm_provider == "openai":
+            self.extractor = LLMExtractor(
+                "openai",
+                api_key=settings.openai_api_key,
+                model=settings.llm_model or "gpt-4o",
+            )
+        elif settings.llm_provider == "ollama":
+            self.extractor = LLMExtractor(
+                "ollama",
+                base_url=settings.ollama_base_url,
+                model=settings.llm_model or "llama2",
+            )
+        else:
+            raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")
+
+        self.loader = StatementLoader(repo)
 
     def sync_issuer(
         self,
@@ -170,6 +201,16 @@ class SyncOrchestrator:
 
                     summary["downloaded"] += 1
 
+                    # Extract statement (decrypt, text, redact, LLM, validate, load)
+                    self._extract_and_load(
+                        message_id,
+                        attachment_id,
+                        raw_path,
+                        file_sha256,
+                        issuer,
+                        summary,
+                    )
+
                 except Exception as e:
                     self.repo.add_message(
                         message_id,
@@ -188,3 +229,96 @@ class SyncOrchestrator:
                         error=str(e),
                     )
                     summary["failed"] += 1
+
+    def _extract_and_load(
+        self,
+        message_id: str,
+        attachment_id: str,
+        raw_path: str,
+        file_sha256: str,
+        issuer: dict,
+        summary: dict,
+    ):
+        """Extract, validate, and load statement to database."""
+        try:
+            issuer_id = issuer["id"]
+            raw_path_obj = Path(raw_path)
+
+            # 1. Decrypt PDF
+            password = self.settings.get_issuer_password(issuer_id)
+            decrypt_pdf(raw_path_obj, password or "")
+            self.repo.update_message_status(
+                message_id, attachment_id, "decrypted"
+            )
+
+            # 2. Extract text
+            text, is_scanned = extract_text(raw_path_obj)
+
+            if is_scanned:
+                self.repo.update_message_status(
+                    message_id,
+                    attachment_id,
+                    "needs_review",
+                    error="scanned_pdf_no_text",
+                )
+                summary["needs_review"] += 1
+                return
+
+            self.repo.update_message_status(
+                message_id, attachment_id, "extracted"
+            )
+
+            # 3. Redact card numbers
+            redacted_text, card_map = redact_card_numbers(text)
+
+            # 4. LLM extraction
+            extract = self.extractor.extract(redacted_text)
+            extract.issuer = issuer_id
+
+            self.repo.update_message_status(
+                message_id, attachment_id, "extracted"
+            )
+
+            # 5. Validate
+            validation_result = validate_statement(extract)
+
+            # 6. Load to database (even if validation fails)
+            stmt_id = self.loader.load_statement(
+                extract,
+                issuer_id,
+                message_id,
+                file_sha256,
+                self.extractor.provider_name,
+                self.extractor.model,
+                validation_result,
+            )
+
+            # Mark as loaded
+            self.repo.update_message_status(
+                message_id,
+                attachment_id,
+                "loaded",
+                statement_id=stmt_id,
+            )
+
+            summary["downloaded"] += 1  # Count as successfully processed
+
+        except ValueError as e:
+            # Extraction failed
+            self.repo.update_message_status(
+                message_id,
+                attachment_id,
+                "extract_failed",
+                error=str(e),
+            )
+            summary["failed"] += 1
+
+        except Exception as e:
+            # Unexpected error
+            self.repo.update_message_status(
+                message_id,
+                attachment_id,
+                "needs_review",
+                error=f"Unexpected error: {str(e)}",
+            )
+            summary["needs_review"] += 1
