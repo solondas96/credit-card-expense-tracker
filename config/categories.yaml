@@ -1,0 +1,41 @@
+categories:
+  - pattern: "^(BIGBASKET|BLINKIT|GROFERS|JIOMART)"
+    category: groceries
+  - pattern: "(SWIGGY|ZOMATO|FOODPANDA|UBER EATS)"
+    category: food_delivery
+  - pattern: "(RESTAURANT|CAFE|PIZZA|BURGER|NOODLE)"
+    category: dining
+  - pattern: "(SHELL|PETROL|FUEL|GAS STATION|PUMP)"
+    category: fuel
+  - pattern: "(FLIGHT|HOTEL|BOOKING|AIRBNB|UBER|OLA|TAXI)"
+    category: travel
+  - pattern: "(FLIPKART|AMAZON|MYNTRA|AJIO|EBAY)"
+    category: shopping_online
+  - pattern: "(ELECTRICITY|WATER|PHONE|INTERNET|TELECOM)"
+    category: utilities
+  - pattern: "(JIO|AIRTEL|VODAFONE|VI|BSNL)"
+    category: telecom
+  - pattern: "(NETFLIX|SPOTIFY|HOTSTAR|PRIME|YOUTUBE|DISNEY)"
+    category: subscriptions
+  - pattern: "(MOVIE|CINEMA|TICKET|CONCERT|SHOW)"
+    category: entertainment
+  - pattern: "(PHARMACY|DOCTOR|HOSPITAL|CLINIC|MEDICAL)"
+    category: health
+  - pattern: "(SCHOOL|COLLEGE|UNIVERSITY|EDUCATION|COURSE)"
+    category: education
+  - pattern: "(INSURANCE|PREMIUM)"
+    category: insurance
+  - pattern: "(RENT|LANDLORD|HOUSING)"
+    category: rent
+  - pattern: "(EMI|INSTALLMENT)"
+    category: emi
+  - pattern: "(CHARGE|FEE|TAX|GST|SURCHARGE)"
+    category: fees_charges
+  - pattern: "(CASHBACK|REWARD|REFUND|CREDIT)"
+    category: cashback_rewards
+  - pattern: "(PAYMENT|INSTALLMENT|SETTLEMENT|PAID)"
+    category: card_payment
+  - pattern: "(TRANSFER|NEFT|RTGS|IMPS)"
+    category: transfer
+
+default_category: uncategorized

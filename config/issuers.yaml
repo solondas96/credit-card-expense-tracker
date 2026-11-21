@@ -1,0 +1,8 @@
+issuers:
+  - id: hdfc
+    name: HDFC Bank
+    senders: ["<<sender@bank.example>>"]
+    subject_patterns: ["statement"]
+    attachment_pattern: ".*\\.pdf$"
+    password_env: CC_PWD_HDFC
+    enabled: true
