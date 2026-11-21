@@ -15,8 +15,8 @@ def test_cli_help():
     assert "auth" in result.stdout
 
 
-def test_auth_not_implemented():
-    """Test that auth command shows not implemented message."""
+def test_auth_requires_credentials():
+    """Test that auth command requires credentials file."""
     result = runner.invoke(app, ["auth"])
     assert result.exit_code == 2
-    assert "not yet implemented" in result.stdout
+    assert "credentials" in result.stdout.lower()
