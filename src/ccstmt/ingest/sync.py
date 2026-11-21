@@ -14,6 +14,8 @@ from ccstmt.ingest.storage import compute_sha256, save_raw_file
 from ccstmt.pdf.decrypt import decrypt_pdf
 from ccstmt.pdf.redact import redact_card_numbers
 from ccstmt.pdf.text import extract_text
+from ccstmt.transform.categorize import Categorizer
+from ccstmt.transform.normalize import normalize_merchant
 
 
 class SyncOrchestrator:
@@ -49,6 +51,10 @@ class SyncOrchestrator:
             raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")
 
         self.loader = StatementLoader(repo)
+
+        # Initialize categorizer
+        categories_path = Path(settings.config_dir) / "categories.yaml"
+        self.categorizer = Categorizer(categories_path)
 
     def sync_issuer(
         self,
@@ -279,10 +285,17 @@ class SyncOrchestrator:
                 message_id, attachment_id, "extracted"
             )
 
-            # 5. Validate
+            # 5. Normalize merchant names and apply categorization
+            for txn in extract.transactions:
+                txn.description = normalize_merchant(txn.description)
+                category, source = self.categorizer.categorize(txn.description)
+                txn.category = category
+                txn.category_source = source
+
+            # 6. Validate
             validation_result = validate_statement(extract)
 
-            # 6. Load to database (even if validation fails)
+            # 7. Load to database (even if validation fails)
             stmt_id = self.loader.load_statement(
                 extract,
                 issuer_id,

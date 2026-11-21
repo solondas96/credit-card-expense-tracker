@@ -20,6 +20,8 @@ class TransactionExtract(BaseModel):
     original_currency: Optional[str] = None
     is_emi: bool = False
     reference: Optional[str] = None
+    category: Optional[str] = None  # Set by categorizer
+    category_source: Optional[str] = None  # "rule" or "default"
 
 
 class StatementExtract(BaseModel):

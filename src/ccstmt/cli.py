@@ -97,6 +97,12 @@ def sync(
     try:
         from ccstmt.db.repo import Repository
         from ccstmt.ingest.sync import SyncOrchestrator
+        from ccstmt.logging_config import setup_logging
+
+        logger = setup_logging(settings.logs_dir)
+        logger.info(
+            f"Starting sync: issuer={issuer}, since={since}, dry_run={dry_run}"
+        )
 
         repo = Repository(settings.db_path)
         client = GmailClient(settings.gmail_credentials_path, settings.gmail_token_path)
@@ -153,6 +159,12 @@ def sync(
             f"{all_summary['new']} new, {all_summary['downloaded']} downloaded"
         )
 
+        logger.info(
+            f"Sync completed: found={all_summary['found']}, "
+            f"new={all_summary['new']}, downloaded={all_summary['downloaded']}, "
+            f"needs_review={all_summary['needs_review']}, failed={all_summary['failed']}"
+        )
+
         repo.close()
         raise typer.Exit(0)
 
@@ -174,15 +186,46 @@ def reprocess(
     """Reprocess statements from raw files or categorize only."""
     try:
         from ccstmt.db.repo import Repository
+        from ccstmt.transform.categorize import Categorizer
 
         repo = Repository(settings.db_path)
 
         if categories_only:
             # Re-categorize all transactions without re-extracting
             console.print("[bold cyan]Re-categorizing transactions...[/bold cyan]")
+
+            categorizer = Categorizer(
+                settings.config_dir / "categories.yaml"
+            )
+
+            # Get all transactions
+            txns = repo.db.execute(
+                "SELECT txn_id, description_raw FROM transactions"
+            ).fetchall()
+
+            updated = 0
+            for txn_id, desc in txns:
+                category, source = categorizer.categorize(desc)
+                repo.db.execute(
+                    "UPDATE transactions "
+                    "SET category = ?, category_source = ? "
+                    "WHERE txn_id = ?",
+                    [category, source, txn_id],
+                )
+                updated += 1
+
             console.print(
-                "[yellow]Categorization framework ready; "
-                "full implementation pending[/yellow]"
+                f"[bold green]✓ Categorized {updated} transactions[/bold green]"
+            )
+
+        elif failed:
+            # Re-extract failed messages
+            console.print(
+                "[yellow]Reprocess --failed not yet fully implemented[/yellow]"
+            )
+            console.print(
+                "Use --categories-only to re-categorize, or implement full "
+                "re-extraction from raw PDFs."
             )
 
         else:
@@ -197,6 +240,8 @@ def reprocess(
 
     except Exception as e:
         console.print(f"[bold red]✗ Reprocess failed:[/bold red] {e}")
+        import traceback
+        traceback.print_exc()
         raise typer.Exit(1)
 
 

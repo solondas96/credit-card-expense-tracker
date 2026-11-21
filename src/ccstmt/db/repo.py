@@ -22,6 +22,12 @@ class Repository:
         with open(schema_path) as f:
             self.db.execute(f.read())
 
+        # Create analytical views
+        views_path = Path(__file__).parent / "views.sql"
+        if views_path.exists():
+            with open(views_path) as f:
+                self.db.execute(f.read())
+
     def message_exists(self, message_id: str, attachment_id: str) -> bool:
         """Check if a message is already in the ledger."""
         result = self.db.execute(

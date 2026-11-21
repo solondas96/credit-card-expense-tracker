@@ -129,6 +129,8 @@ class StatementLoader:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (txn_id) DO UPDATE SET
                     description_raw = ?,
+                    category = ?,
+                    category_source = ?,
                     amount_signed = ?,
                     amount = ?,
                     direction = ?
@@ -141,9 +143,9 @@ class StatementLoader:
                     txn.txn_date,
                     txn.posting_date,
                     txn.description,
-                    None,  # merchant (filled in transform phase)
-                    None,  # category (filled in transform phase)
-                    None,  # category_source
+                    txn.description,  # merchant (normalized name)
+                    getattr(txn, "category", None),
+                    getattr(txn, "category_source", None),
                     amount_signed,
                     float(txn.amount),
                     txn.direction,
@@ -155,6 +157,8 @@ class StatementLoader:
                     None,
                     # For ON CONFLICT DO UPDATE
                     txn.description,
+                    getattr(txn, "category", None),
+                    getattr(txn, "category_source", None),
                     amount_signed,
                     float(txn.amount),
                     txn.direction,
