@@ -94,9 +94,73 @@ def sync(
     dry_run: bool = typer.Option(False, help="Preview what would be processed"),
 ) -> None:
     """Sync and ingest credit card statements."""
-    console.print("[yellow]Sync not yet implemented[/yellow]")
-    console.print("See milestone 3 for sync implementation.")
-    raise typer.Exit(2)
+    try:
+        from ccstmt.db.repo import Repository
+        from ccstmt.ingest.sync import SyncOrchestrator
+
+        repo = Repository(settings.db_path)
+        client = GmailClient(settings.gmail_credentials_path, settings.gmail_token_path)
+        orchestrator = SyncOrchestrator(repo, client, settings.data_dir, settings)
+
+        # Filter issuers
+        issuers_to_sync = [
+            i
+            for i in settings.issuers
+            if i.get("enabled", True) and (not issuer or i["id"] == issuer)
+        ]
+
+        if not issuers_to_sync:
+            console.print("[yellow]No enabled issuers configured[/yellow]")
+            raise typer.Exit(1)
+
+        console.print(
+            f"[bold cyan]Syncing {len(issuers_to_sync)} issuer(s)"
+            f"{' (dry-run)' if dry_run else ''}...[/bold cyan]"
+        )
+
+        all_summary = {"found": 0, "new": 0, "downloaded": 0, "needs_review": 0, "failed": 0}
+        issuer_results = []
+
+        for issuer_config in issuers_to_sync:
+            summary = orchestrator.sync_issuer(issuer_config, since, dry_run)
+            issuer_results.append((issuer_config["id"], summary))
+
+            for key in all_summary:
+                all_summary[key] += summary.get(key, 0)
+
+        # Display results table
+        table = Table(title="Sync Summary")
+        table.add_column("Issuer", style="cyan")
+        table.add_column("Found", justify="right", style="blue")
+        table.add_column("New", justify="right", style="green")
+        table.add_column("Downloaded", justify="right", style="magenta")
+        table.add_column("Needs Review", justify="right", style="yellow")
+        table.add_column("Failed", justify="right", style="red")
+
+        for issuer_id, summary in issuer_results:
+            table.add_row(
+                issuer_id,
+                str(summary["found"]),
+                str(summary["new"]),
+                str(summary["downloaded"]),
+                str(summary["needs_review"]),
+                str(summary["failed"]),
+            )
+
+        console.print(table)
+        console.print(
+            f"[bold]Total:[/bold] {all_summary['found']} found, "
+            f"{all_summary['new']} new, {all_summary['downloaded']} downloaded"
+        )
+
+        repo.close()
+        raise typer.Exit(0)
+
+    except Exception as e:
+        console.print(f"[bold red]✗ Sync failed:[/bold red] {e}")
+        import traceback
+        traceback.print_exc()
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -116,9 +180,55 @@ def reprocess(
 @app.command()
 def status() -> None:
     """Show sync status and counts."""
-    console.print("[yellow]Status not yet implemented[/yellow]")
-    console.print("See milestone 3 for status implementation.")
-    raise typer.Exit(2)
+    try:
+        from ccstmt.db.repo import Repository
+
+        repo = Repository(settings.db_path)
+
+        counts = repo.get_message_counts_by_status()
+        needs_review = repo.get_messages_needing_review()
+
+        # Display status table
+        table = Table(title="Message Status Counts")
+        table.add_column("Status", style="cyan")
+        table.add_column("Count", justify="right", style="green")
+
+        for status in [
+            "discovered",
+            "downloaded",
+            "decrypted",
+            "extracted",
+            "validated",
+            "loaded",
+            "needs_review",
+            "decrypt_failed",
+            "extract_failed",
+            "unsupported",
+            "duplicate",
+        ]:
+            count = counts.get(status, 0)
+            table.add_row(status, str(count))
+
+        console.print(table)
+
+        if needs_review:
+            console.print("\n[bold yellow]Items Needing Review:[/bold yellow]")
+            review_table = Table()
+            review_table.add_column("Message ID", style="cyan")
+            review_table.add_column("Status", style="yellow")
+            review_table.add_column("Error", style="red")
+
+            for msg_id, att_id, issuer, subject, status, error in needs_review[:10]:
+                review_table.add_row(msg_id[:8], status, error or "(no error)")
+
+            console.print(review_table)
+
+        repo.close()
+        raise typer.Exit(0)
+
+    except Exception as e:
+        console.print(f"[bold red]✗ Status check failed:[/bold red] {e}")
+        raise typer.Exit(1)
 
 
 @app.command()
